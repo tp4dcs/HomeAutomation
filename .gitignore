@@ -1,0 +1,30 @@
+# Node.js dependencies
+/node_modules
+/npm-debug.log*
+/.nyc_output
+/coverage
+/.grunt
+/.lock-wscript
+/build/Release
+/deps/npm
+/yarn-error.log
+
+# Environment variables
+/.env
+
+# Logs
+logs
+*.log
+*.log.*
+
+# Editor/IDE specific files
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# OS generated files
+.DS_Store
+.Trash-*
+ehthumbs.db
+Thumbs.db

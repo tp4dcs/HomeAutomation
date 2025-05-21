@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>MQTT Dashboard</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      background: #f3f4f6;
+      padding: 2rem;
+    }
+
+    h2 {
+      margin-top: 0;
+      text-align: center;
+    }
+
+    .status-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      margin-bottom: 1.5rem;
+      align-items: center;
+    }
+
+    .status-item {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+      font-weight: bold;
+      font-size: 1.1rem;
+    }
+
+    .circle {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      animation: pulse 1.5s infinite;
+    }
+
+    .online {
+      background-color: #22c55e;
+      box-shadow: 0 0 0 4px rgba(34, 197, 94, 0.3);
+    }
+
+    .offline {
+      background-color: #ef4444;
+      box-shadow: 0 0 0 4px rgba(239, 68, 68, 0.3);
+    }
+
+    @keyframes pulse {
+      0% {
+        transform: scale(1);
+        opacity: 0.8;
+      }
+      50% {
+        transform: scale(1.3);
+        opacity: 1;
+      }
+      100% {
+        transform: scale(1);
+        opacity: 0.8;
+      }
+    }
+
+    .relay-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 1rem;
+    }
+
+    .relay {
+      padding: 1rem;
+      border-radius: 10px;
+      background: white;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+      text-align: center;
+    }
+
+    .on {
+      background: #34d399;
+      color: white;
+    }
+
+    .off {
+      background: #f87171;
+      color: white;
+    }
+
+    button {
+      padding: 0.5rem 1rem;
+      font-size: 1rem;
+      margin-top: 0.5rem;
+      cursor: pointer;
+    }
+
+    #settingsBtn {
+      position: absolute;
+      top: 1rem;
+      right: 1rem;
+    }
+
+    .modal {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.4);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+    }
+
+    .modal-content {
+      background: white;
+      padding: 2rem;
+      border-radius: 10px;
+      width: 300px;
+    }
+
+    .modal-content h3 {
+      margin-top: 0;
+    }
+
+    .modal-content input {
+      width: 100%;
+      margin-bottom: 0.8rem;
+      padding: 0.5rem;
+    }
+
+    .hidden {
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <h2 id="dashboardTitle">MQTT Dashboard</h2>
+
+  <button id="settingsBtn">⚙️ Settings</button>
+
+  <div class="status-grid">
+    <div></div>
+    <div class="status-item">
+      MQTT <div id="mqttIndicator" class="circle offline"></div>
+    </div>
+    <div class="status-item">
+      ESP Module <div id="espIndicator" class="circle offline"></div>
+    </div>
+    <div></div>
+  </div>
+
+  <div class="relay-grid" id="relayGrid">
+    <!-- Buttons added by JS -->
+  </div>
+
+  <!-- Settings Modal -->
+  <div class="modal hidden" id="settingsModal">
+    <div class="modal-content">
+      <h3>MQTT Configuration</h3>
+      <input id="brokerUrl" placeholder="Broker URL" />
+      <input id="brokerPort" placeholder="Port" type="number" />
+      <input id="brokerUsername" placeholder="Username" />
+      <input id="brokerPassword" placeholder="Password" type="password" />
+      <input id="uiTitle" placeholder="Dashboard Title" />
+      <button id="saveBtn">Save</button>
+    </div>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    const socket = io();
+
+    const mqttIndicator = document.getElementById("mqttIndicator");
+    const espIndicator = document.getElementById("espIndicator");
+    const relayGrid = document.getElementById("relayGrid");
+    const dashboardTitle = document.getElementById("dashboardTitle");
+
+    const settingsBtn = document.getElementById("settingsBtn");
+    const settingsModal = document.getElementById("settingsModal");
+    const saveBtn = document.getElementById("saveBtn");
+
+    const brokerUrl = document.getElementById("brokerUrl");
+    const brokerPort = document.getElementById("brokerPort");
+    const brokerUsername = document.getElementById("brokerUsername");
+    const brokerPassword = document.getElementById("brokerPassword");
+    const uiTitle = document.getElementById("uiTitle");
+
+    const relayStates = {};
+
+    function renderRelays() {
+      relayGrid.innerHTML = "";
+      for (let i = 1; i <= 8; i++) {
+        const state = relayStates[i] || "UNKNOWN";
+        const div = document.createElement("div");
+        div.className = "relay " + (state === "ON" ? "on" : "off");
+
+        div.innerHTML = `
+          <h3>Relay ${i}</h3>
+          <p>Status: ${state}</p>
+          <button onclick="toggleRelay(${i})">${state === "ON" ? "Turn OFF" : "Turn ON"}</button>
+        `;
+        relayGrid.appendChild(div);
+      }
+    }
+
+    function toggleRelay(relayNum) {
+      const state = relayStates[relayNum] === "ON" ? "OFF" : "ON";
+      socket.emit("toggleRelay", relayNum);
+      relayStates[relayNum] = state;
+      renderRelays();
+    }
+
+    socket.on("mqttStatus", (status) => {
+      mqttIndicator.className = "circle " + (status === "CONNECTED" ? "online" : "offline");
+    });
+
+    socket.on("espStatus", (status) => {
+      espIndicator.className = "circle " + (status === "ONLINE" ? "online" : "offline");
+    });
+
+    socket.on("relayStatus", ({ relay, status }) => {
+      relayStates[relay] = status;
+      renderRelays();
+    });
+
+    renderRelays();
+
+    // Load saved config from localStorage
+    const savedConfig = JSON.parse(localStorage.getItem("mqttConfig") || "{}");
+    if (savedConfig.uiTitle) dashboardTitle.textContent = savedConfig.uiTitle;
+
+    // Show modal
+    settingsBtn.addEventListener("click", () => {
+      brokerUrl.value = savedConfig.brokerUrl || "";
+      brokerPort.value = savedConfig.brokerPort || "";
+      brokerUsername.value = savedConfig.brokerUsername || "";
+      brokerPassword.value = savedConfig.brokerPassword || "";
+      uiTitle.value = savedConfig.uiTitle || "";
+      settingsModal.classList.remove("hidden");
+    });
+
+    // Save new config
+    saveBtn.addEventListener("click", () => {
+      const config = {
+        brokerUrl: brokerUrl.value,
+        brokerPort: parseInt(brokerPort.value),
+        brokerUsername: brokerUsername.value,
+        brokerPassword: brokerPassword.value,
+        uiTitle: uiTitle.value,
+      };
+
+      localStorage.setItem("mqttConfig", JSON.stringify(config));
+      settingsModal.classList.add("hidden");
+      location.reload();
+    });
+  </script>
+</body>
+</html>

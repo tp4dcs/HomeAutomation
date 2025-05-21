@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>MQTT Dashboard</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      background: #f3f4f6;
+      padding: 2rem;
+    }
+
+    h2 {
+      margin-top: 0;
+      text-align: center;
+    }
+
+    .status-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 50%;
+  margin: 0 auto 1.5rem auto;
+  transform: translateX(12.5%); /* Center over Relay 2 & 3 */
+    }
+
+
+    .status-item {
+      display: flex;
+      align-items: center;
+      font-size: 1.1rem;
+      font-weight: bold;
+    }
+
+    .status-indicator {
+      display: inline-block;
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      margin-left: 8px;
+    }
+
+    .online {
+      background-color: #34d399;
+      box-shadow: 0 0 5px #34d399;
+      animation: pulse 1.5s infinite;
+    }
+
+    .offline {
+      background-color: #f87171;
+      box-shadow: none;
+    }
+
+    @keyframes pulse {
+      0% {
+        box-shadow: 0 0 0 0 rgba(52, 211, 153, 0.7);
+      }
+      70% {
+        box-shadow: 0 0 0 8px rgba(52, 211, 153, 0);
+      }
+      100% {
+        box-shadow: 0 0 0 0 rgba(52, 211, 153, 0);
+      }
+    }
+
+    .relay-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 1rem;
+    }
+
+    .relay {
+      padding: 1rem;
+      border-radius: 10px;
+      background: white;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+      text-align: center;
+    }
+
+    .on {
+      background: #34d399;
+      color: white;
+    }
+
+    .off {
+      background: #f87171;
+      color: white;
+    }
+
+    button {
+      padding: 0.5rem 1rem;
+      font-size: 1rem;
+      margin-top: 0.5rem;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <h2>MQTT Dashboard</h2>
+
+  <div class="status-bar">
+    <div class="status-item">
+      MQTT
+      <span id="mqttIndicator" class="status-indicator offline"></span>
+    </div>
+    <div class="status-item">
+      ESP Module
+      <span id="espIndicator" class="status-indicator offline"></span>
+    </div>
+  </div>
+
+  <div class="relay-grid" id="relayGrid">
+    <!-- Buttons added by JS -->
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    const socket = io();
+
+    const mqttIndicator = document.getElementById("mqttIndicator");
+    const espIndicator = document.getElementById("espIndicator");
+    const relayGrid = document.getElementById("relayGrid");
+    const relayStates = {};
+
+    function renderRelays() {
+      relayGrid.innerHTML = "";
+      for (let i = 1; i <= 8; i++) {
+        const state = relayStates[i] || "UNKNOWN";
+        const div = document.createElement("div");
+        div.className = "relay " + (state === "ON" ? "on" : "off");
+
+        div.innerHTML = `
+          <h3>Relay ${i}</h3>
+          <p>Status: ${state}</p>
+          <button onclick="toggleRelay(${i})">${state === "ON" ? "Turn OFF" : "Turn ON"}</button>
+        `;
+        relayGrid.appendChild(div);
+      }
+    }
+
+    function toggleRelay(relayNum) {
+      const state = relayStates[relayNum] === "ON" ? "OFF" : "ON";
+      socket.emit("toggleRelay", relayNum);
+      relayStates[relayNum] = state;
+      renderRelays();
+    }
+
+    socket.on("mqttStatus", (status) => {
+      mqttIndicator.className = "status-indicator " + (status === "CONNECTED" ? "online" : "offline");
+    });
+
+    socket.on("espStatus", (status) => {
+      espIndicator.className = "status-indicator " + (status === "ONLINE" ? "online" : "offline");
+    });
+
+    socket.on("relayStatus", ({ relay, status }) => {
+      relayStates[relay] = status;
+      renderRelays();
+    });
+
+    renderRelays();
+  </script>
+</body>
+</html>

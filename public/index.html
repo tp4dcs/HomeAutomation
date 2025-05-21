@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <title>MQTT Dashboard</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            background: #f3f4f6;
+            padding: 2rem;
+        }
+
+        h2 {
+            margin-top: 0;
+            text-align: center;
+        }
+
+        .controls-container {
+            display: flex;
+            justify-content: flex-end;
+            margin-bottom: 1rem;
+        }
+
+        #settingsBtn, #scheduleBtn {
+            padding: 0.5rem 1rem;
+            font-size: 1rem;
+            cursor: pointer;
+            margin-left: 0.5rem;
+        }
+
+        .status-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            margin-bottom: 1.5rem;
+            align-items: center;
+        }
+
+        .status-item {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            font-weight: bold;
+            font-size: 1.1rem;
+        }
+
+        .circle {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            animation: pulse 1.5s infinite;
+        }
+
+        .online {
+            background-color: #22c55e;
+            box-shadow: 0 0 0 4px rgba(34, 197, 94, 0.3);
+        }
+
+        .offline {
+            background-color: #ef4444;
+            box-shadow: 0 0 0 4px rgba(239, 68, 68, 0.3);
+        }
+
+        @keyframes pulse {
+            0% {
+                transform: scale(1);
+                opacity: 0.8;
+            }
+            50% {
+                transform: scale(1.3);
+                opacity: 1;
+            }
+            100% {
+                transform: scale(1);
+                opacity: 0.8;
+            }
+        }
+
+        .relay-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+        }
+
+        .relay {
+            padding: 1rem;
+            border-radius: 10px;
+            background: white;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .relay-controls {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 0.5rem;
+            margin-top: 0.5rem;
+        }
+
+        .on {
+            background: #34d399;
+            color: white;
+        }
+
+        .off {
+            background: #f87171;
+            color: white;
+        }
+
+        button {
+            padding: 0.5rem 1rem;
+            font-size: 1rem;
+            cursor: pointer;
+        }
+
+        .modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.4);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+
+        .modal-content {
+            background: white;
+            padding: 2rem;
+            border-radius: 10px;
+            width: 400px;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+
+        .modal-content h3 {
+            margin-top: 0;
+            text-align: center;
+            margin-bottom: 1rem;
+        }
+
+        .modal-content label {
+            display: block;
+            margin-bottom: 0.3rem;
+            font-weight: bold;
+        }
+
+        .modal-content input[type="number"],
+        .modal-content select {
+            width: calc(100% - 12px);
+            padding: 0.5rem;
+            margin-bottom: 0.8rem;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+
+        .modal-content button {
+            display: inline-block;
+            margin-right: 0.5rem;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        .schedule-item {
+            border: 1px solid #ddd;
+            padding: 0.8rem;
+            margin-bottom: 0.5rem;
+            border-radius: 5px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .schedule-actions button {
+            padding: 0.3rem 0.6rem;
+            font-size: 0.8rem;
+            margin-left: 0.3rem;
+        }
+
+        .mode-switch-container {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .mode-switch-container label {
+            font-size: 0.9rem;
+        }
+
+        .mode-switch {
+            appearance: none;
+            width: 40px;
+            height: 20px;
+            background-color: #ccc;
+            border-radius: 10px;
+            position: relative;
+            cursor: pointer;
+        }
+
+        .mode-switch::before {
+            content: '';
+            position: absolute;
+            width: 16px;
+            height: 16px;
+            background-color: white;
+            border-radius: 50%;
+            top: 2px;
+            left: 2px;
+            transition: transform 0.2s ease-in-out;
+        }
+
+        .mode-switch:checked {
+            background-color: #4CAF50;
+        }
+
+        .mode-switch:checked::before {
+            transform: translateX(20px);
+        }
+
+        .relay.auto-mode button {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+    </style>
+</head>
+<body>
+    <h2 id="dashboardTitle">MQTT Dashboard</h2>
+
+    <div class="controls-container">
+        <button id="scheduleBtn">⏱️ Schedule</button>
+        <button id="settingsBtn">⚙️ Settings</button>
+    </div>
+
+    <div class="status-grid">
+        <div></div>
+        <div class="status-item">
+            MQTT <div id="mqttIndicator" class="circle offline"></div>
+        </div>
+        <div class="status-item">
+            ESP Module <div id="espIndicator" class="circle offline"></div>
+        </div>
+        <div></div>
+    </div>
+
+    <div class="relay-grid" id="relayGrid">
+    </div>
+
+    <div class="modal hidden" id="settingsModal">
+        <div class="modal-content">
+            <h3>MQTT Configuration</h3>
+            <label for="brokerUrl">Broker URL:</label>
+            <input id="brokerUrl" placeholder="Broker URL" />
+            <label for="brokerPort">Port:</label>
+            <input id="brokerPort" placeholder="Port" type="number" />
+            <label for="brokerUsername">Username:</label>
+            <input id="brokerUsername" placeholder="Username" />
+            <label for="brokerPassword">Password:</label>
+            <input id="brokerPassword" placeholder="Password" type="password" />
+            <label for="uiTitle">Dashboard Title:</label>
+            <input id="uiTitle" placeholder="Dashboard Title" />
+            <button id="saveBtn">Save</button>
+            <button onclick="settingsModal.classList.add('hidden')">Cancel</button>
+        </div>
+    </div>
+
+    <div class="modal hidden" id="scheduleModal">
+        <div class="modal-content">
+            <h3>Relay Scheduling</h3>
+            <div id="schedulesList">
+            </div>
+            <h4>Add New Schedule</h4>
+            <label for="scheduleRelay">Relay:</label>
+            <select id="scheduleRelay">
+                <option value="1">Relay 1</option>
+                <option value="2">Relay 2</option>
+                <option value="3">Relay 3</option>
+                <option value="4">Relay 4</option>
+                <option value="5">Relay 5</option>
+                <option value="6">Relay 6</option>
+                <option value="7">Relay 7</option>
+                <option value="8">Relay 8</option>
+            </select>
+            <label for="scheduleTime">Time (HH:MM):</label>
+            <input type="time" id="scheduleTime" />
+            <label>Days of the Week:</label>
+            <div>
+                <input type="checkbox" id="sun" name="days" value="0"> <label for="sun">Sun</label>
+                <input type="checkbox" id="mon" name="days" value="1"> <label for="mon">Mon</label>
+                <input type="checkbox" id="tue" name="days" value="2"> <label for="tue">Tue</label>
+                <input type="checkbox" id="wed" name="days" value="3"> <label for="wed">Wed</label>
+                <input type="checkbox" id="thu" name="days" value="4"> <label for="thu">Thu</label>
+                <input type="checkbox" id="fri" name="days" value="5"> <label for="fri">Fri</label>
+                <input type="checkbox" id="sat" name="days" value="6"> <label for="sat">Sat</label>
+            </div>
+            <label for="scheduleAction">Action:</label>
+            <select id="scheduleAction">
+                <option value="ON">Turn ON</option>
+                <option value="OFF">Turn OFF</option>
+            </select>
+            <button id="addScheduleBtn">Add Schedule</button>
+            <button onclick="scheduleModal.classList.add('hidden')">Close</button>
+        </div>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        const socket = io();
+
+        const mqttIndicator = document.getElementById("mqttIndicator");
+        const espIndicator = document.getElementById("espIndicator");
+        const relayGrid = document.getElementById("relayGrid");
+        const dashboardTitle = document.getElementById("dashboardTitle");
+
+        const settingsBtn = document.getElementById("settingsBtn");
+        const settingsModal = document.getElementById("settingsModal");
+        const saveBtn = document.getElementById("saveBtn");
+
+        const scheduleBtn = document.getElementById("scheduleBtn");
+        const scheduleModal = document.getElementById("scheduleModal");
+        const addScheduleBtn = document.getElementById("addScheduleBtn");
+        const schedulesList = document.getElementById("schedulesList");
+
+        const brokerUrl = document.getElementById("brokerUrl");
+        const brokerPort = document.getElementById("brokerPort");
+        const brokerUsername = document.getElementById("brokerUsername");
+        const brokerPassword = document.getElementById("brokerPassword");
+        const uiTitle = document.getElementById("uiTitle");
+
+        const scheduleRelay = document.getElementById("scheduleRelay");
+        const scheduleTime = document.getElementById("scheduleTime");
+        const scheduleAction = document.getElementById("scheduleAction");
+        const dayCheckboxes = document.querySelectorAll('input[name="days"]');
+
+        const relayStates = {};
+        const relayModes = {
+            1: "manual",
+            2: "manual",
+            3: "manual",
+            4: "manual",
+            5: "manual",
+            6: "manual",
+            7: "manual",
+            8: "manual"
+        };
+        let schedules = JSON.parse(localStorage.getItem("relaySchedules") || "{}");
+
+        function renderRelays() {
+    relayGrid.innerHTML = "";
+    for (let i = 1; i <= 8; i++) {
+        const state = relayStates[i] || "UNKNOWN";
+        const mode = relayModes[i] || "manual"; // Default to manual
+        const div = document.createElement("div");
+        div.className = "relay " + (state === "ON" ? "on" : "off") + (mode === "auto" ? " auto-mode" : "");
+
+        div.innerHTML = `
+            <h3>Relay ${i}</h3>
+            <div class="mode-switch-container">
+                <label for="modeSwitch${i}">Manual</label>
+                <input type="checkbox" id="modeSwitch${i}" class="mode-switch" data-relay="${i}" ${mode === 'auto' ? 'checked' : ''}>
+                <label for="modeSwitch${i}">Auto</label>
+            </div>
+            <p>Status: ${state}</p>
+            <div class="relay-controls">
+                <button onclick="toggleRelay(${i})" ${mode === 'auto' ? 'disabled' : ''}>${state === "ON" ? "Turn OFF" : "Turn ON"}</button>
+            </div>
+        `;
+        relayGrid.appendChild(div);
+    }
+
+    // Attach event listeners to the new mode switches after rendering
+    document.querySelectorAll('.mode-switch').forEach(switchElement => {
+        switchElement.addEventListener('change', handleModeChange);
+    });
+}
+
+        function handleModeChange(event) {
+            const relayNum = parseInt(event.target.dataset.relay);
+            const isAuto = event.target.checked;
+            relayModes[relayNum] = isAuto ? "auto" : "manual";
+            console.log("Client: Mode changed - relayModes:", relayModes);
+            socket.emit("setRelayMode", { relay: relayNum, mode: relayModes[relayNum] });
+            renderRelays();
+        }
+
+        function toggleRelay(relayNum) {
+            if (relayModes[relayNum] !== "auto") {
+                const state = relayStates[relayNum] === "ON" ? "OFF" : "ON";
+                socket.emit("toggleRelay", relayNum);
+                relayStates[relayNum] = state;
+                renderRelays();
+            }
+        }
+
+        socket.on("connect", () => {
+            console.log("Socket.IO connected");
+            socket.emit("getInitialStates");
+
+            socket.on("mqttStatus", (status) => {
+                mqttIndicator.className = "circle " + (status === "CONNECTED" ? "online" : "offline");
+            });
+
+            socket.on("espStatus", (status) => {
+                espIndicator.className = "circle " + (status === "ONLINE" ? "online" : "offline");
+                console.log("Client: Received ESP Status:", status);
+            });
+
+            socket.on("relayStatus", ({ relay, status }) => {
+                console.log("Client: Received relayStatus EVENT - Relay:", relay, "Status:", status); // <--- ADD THIS LOG
+                relayStates[relay] = status;
+                console.log("Client: Updated relayStates:", relayStates); // <--- ADD THIS LOG
+                renderRelays();
+                console.log("Client: renderRelays() called"); // <--- ADD THIS LOG
+            });
+
+            socket.on("relayModeUpdated", ({ relay, mode }) => {
+                relayModes[relay] = mode;
+                console.log("Client: relayModeUpdated - relayModes:", relayModes);
+                renderRelays();
+            });
+
+            socket.on("schedulesUpdated", (updatedSchedules) => {
+                schedules = updatedSchedules;
+                localStorage.setItem("relaySchedules", JSON.stringify(schedules));
+                renderSchedules();
+            });
+
+            setTimeout(() => {
+                renderRelays();
+            }, 200);
+        });
+
+        function renderSchedules() {
+            schedulesList.innerHTML = "";
+            for (const relayNum in schedules) {
+                if (schedules.hasOwnProperty(relayNum) && Array.isArray(schedules[relayNum])) {
+                    schedules[relayNum].forEach((schedule, index) => {
+                        const days = schedule.days.map(dayIndex => ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][dayIndex]).join(", ");
+                        const scheduleDiv = document.createElement("div");
+                        scheduleDiv.className = "schedule-item";
+                        scheduleDiv.innerHTML = `
+                            <span>Relay ${relayNum}: <span class="math-inline">\{schedule\.time\} \(</span>{days}) - <span class="math-inline">\{schedule\.action\}</span\>
+<div class\="schedule\-actions"\>
+<button onclick\="deleteSchedule\('</span>{relayNum}', ${index})">Delete</button>
+                            </div>
+                        `;
+                        schedulesList.appendChild(scheduleDiv);
+                    });
+                }
+            }
+        }
+
+        function deleteSchedule(relayNum, index) {
+            socket.emit("deleteSchedule", { relay: parseInt(relayNum), index: index });
+        }
+
+        // Load saved config from localStorage
+        const savedConfig = JSON.parse(localStorage.getItem("mqttConfig") || "{}");
+        if (savedConfig.uiTitle) dashboardTitle.textContent = savedConfig.uiTitle;
+
+        // Show settings modal
+        settingsBtn.addEventListener("click", () => {
+            brokerUrl.value = savedConfig.brokerUrl || "";
+            brokerPort.value = savedConfig.brokerPort || "";
+            brokerUsername.value = savedConfig.brokerUsername || "";
+            brokerPassword.value = savedConfig.brokerPassword || "";
+            uiTitle.value = savedConfig.uiTitle || "";
+            settingsModal.classList.remove("hidden");
+        });
+
+        // Save new config
+        saveBtn.addEventListener("click", () => {
+            const config = {
+                brokerUrl: brokerUrl.value,
+                brokerPort: parseInt(brokerPort.value),
+                brokerUsername: brokerUsername.value,
+                brokerPassword: brokerPassword.value,
+                uiTitle: uiTitle.value,
+            };
+
+            localStorage.setItem("mqttConfig", JSON.stringify(config));
+            settingsModal.classList.add("hidden");
+            location.reload();
+        });
+
+        // Show schedule modal
+        scheduleBtn.addEventListener("click", () => {
+            scheduleModal.classList.remove("hidden");
+            renderSchedules(); // Ensure schedules are up-to-date when opening
+        });
+
+        // Add new schedule
+        addScheduleBtn.addEventListener("click", () => {
+            const relay = parseInt(scheduleRelay.value);
+            const time = scheduleTime.value;
+            const action = scheduleAction.value;
+            const selectedDays = Array.from(dayCheckboxes)
+                .filter(checkbox => checkbox.checked)
+                .map(checkbox => parseInt(checkbox.value));
+
+            if (time && selectedDays.length > 0) {
+                const newSchedule = { time, days: selectedDays, action };
+                socket.emit("addSchedule", { relay, schedule: newSchedule });
+
+                // Clear input fields
+                scheduleTime.value = "";
+                dayCheckboxes.forEach(checkbox => checkbox.checked = false);
+            } else {
+                alert("Please select a time and at least one day.");
+            }
+        });
+    </script>
+</body>
+</html>
